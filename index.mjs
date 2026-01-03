@@ -3,38 +3,53 @@ import cors from "cors";
 import cron from "node-cron";
 import dotenv from "dotenv";
 import twilio from "twilio";
-import nodemailer from "nodemailer"; // ✅ NEW
+import nodemailer from "nodemailer";
 
 import periodRoutes from "./routes/periodRoutes.js";
 
 dotenv.config();
 
-// ✅ CREATE APP FIRST
+// ─────────────────────────────────────────
+// ✅ CREATE APP
+// ─────────────────────────────────────────
 const app = express();
 
+// ─────────────────────────────────────────
+// ✅ BASE URL (FOR CRON + PROD)
+// ─────────────────────────────────────────
+const BASE_URL = process.env.BACKEND_URL || "http://localhost:5000";
+
+// ─────────────────────────────────────────
 // ✅ TWILIO CLIENT
+// ─────────────────────────────────────────
 const client = twilio(
   process.env.TWILIO_SID,
   process.env.TWILIO_AUTH
 );
 
+// ─────────────────────────────────────────
 // ✅ MIDDLEWARE
+// ─────────────────────────────────────────
 app.use(
   cors({
-    origin: "http://localhost:5173",
-    methods: ["GET", "POST"],
+    origin: [
+      "http://localhost:5173",
+      "https://eclipse-frontend.netlify.app"
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE"],
   })
 );
 
 app.use(express.json());
 
-// ✅ ROUTES (EXISTING)
+// ─────────────────────────────────────────
+// ✅ ROUTES
+// ─────────────────────────────────────────
 app.use("/api/period", periodRoutes);
 
 // ─────────────────────────────────────────
-// 📩 EMAIL MESSAGE ROUTE (NEW FEATURE)
+// 📩 EMAIL MESSAGE ROUTE
 // ─────────────────────────────────────────
-
 const emailTransporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -67,13 +82,10 @@ app.post("/api/send-message", async (req, res) => {
 });
 
 // ─────────────────────────────────────────
-// 📲 SMS NOTIFICATION SYSTEM (UNCHANGED)
+// 📲 SMS NOTIFICATION SYSTEM
 // ─────────────────────────────────────────
-
-// 📨 Notification queue (optional)
 let notificationsQueue = [];
 
-// 🔔 Send SMS
 app.post("/notify", async (req, res) => {
   const { body } = req.body;
 
@@ -92,7 +104,6 @@ app.post("/notify", async (req, res) => {
   }
 });
 
-// 📤 Frontend fetches next notification
 app.get("/notify-latest", (req, res) => {
   if (notificationsQueue.length > 0) {
     const next = notificationsQueue.shift();
@@ -102,18 +113,20 @@ app.get("/notify-latest", (req, res) => {
   }
 });
 
-// 🧪 Health check
+// ─────────────────────────────────────────
+// 🧪 HEALTH CHECK
+// ─────────────────────────────────────────
 app.get("/", (req, res) => {
   res.send("Backend is running 🤍");
 });
 
 // ─────────────────────────────────────────
-// ⏰ CRON JOBS (UNCHANGED)
+// ⏰ CRON JOBS (PRODUCTION SAFE)
 // ─────────────────────────────────────────
 
 // 🌅 6:00 AM — Good Morning
 cron.schedule("0 6 * * *", async () => {
-  await fetch("http://localhost:5000/notify", {
+  await fetch(`${BASE_URL}/notify`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -124,7 +137,7 @@ cron.schedule("0 6 * * *", async () => {
 
 // 🌙 11:00 PM — Good Night
 cron.schedule("0 23 * * *", async () => {
-  await fetch("http://localhost:5000/notify", {
+  await fetch(`${BASE_URL}/notify`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -133,12 +146,16 @@ cron.schedule("0 23 * * *", async () => {
   });
 });
 
+// ─────────────────────────────────────────
 // 🔍 ENV DEBUG (SAFE)
+// ─────────────────────────────────────────
 console.log("EMAIL_USER:", process.env.EMAIL_USER);
 console.log("EMAIL_PASS:", process.env.EMAIL_PASS ? "LOADED" : "MISSING");
 
-// ✅ START SERVER
-const PORT = 5000;
+// ─────────────────────────────────────────
+// ✅ START SERVER (RENDER SAFE)
+// ─────────────────────────────────────────
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
