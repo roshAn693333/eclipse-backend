@@ -64,7 +64,7 @@ app.post("/api/send-message", async (req, res) => {
 
   try {
     await resend.emails.send({
-      from: "For You App  <onboarding@resend.dev>",
+      from: "Eclipse  <onboarding@resend.dev>",
       to: [process.env.RECEIVER_EMAIL],
       subject: "💌 New message from her",
       text: message,
