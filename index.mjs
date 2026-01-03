@@ -3,7 +3,7 @@ import cors from "cors";
 import cron from "node-cron";
 import dotenv from "dotenv";
 import twilio from "twilio";
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
 import periodRoutes from "./routes/periodRoutes.js";
 
@@ -20,6 +20,11 @@ const app = express();
 const BASE_URL = process.env.BACKEND_URL || "http://localhost:5000";
 
 // ─────────────────────────────────────────
+// ✅ RESEND CLIENT
+// ─────────────────────────────────────────
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+// ─────────────────────────────────────────
 // ✅ TWILIO CLIENT
 // ─────────────────────────────────────────
 const client = twilio(
@@ -34,7 +39,7 @@ app.use(
   cors({
     origin: [
       "http://localhost:5173",
-      "https://eclipse-frontend.netlify.app"
+      "https://eclipse-frontend.netlify.app",
     ],
     methods: ["GET", "POST", "PUT", "DELETE"],
   })
@@ -48,16 +53,8 @@ app.use(express.json());
 app.use("/api/period", periodRoutes);
 
 // ─────────────────────────────────────────
-// 📩 EMAIL MESSAGE ROUTE
+// 📩 EMAIL MESSAGE ROUTE (RESEND)
 // ─────────────────────────────────────────
-const emailTransporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
-
 app.post("/api/send-message", async (req, res) => {
   const { message } = req.body;
 
@@ -66,17 +63,17 @@ app.post("/api/send-message", async (req, res) => {
   }
 
   try {
-    await emailTransporter.sendMail({
-      from: `"For You App 🤍" <${process.env.EMAIL_USER}>`,
-      to: process.env.RECEIVER_EMAIL,
+    await resend.emails.send({
+      from: "For You App  <onboarding@resend.dev>",
+      to: [process.env.RECEIVER_EMAIL],
       subject: "💌 New message from her",
       text: message,
     });
 
-    console.log("📩 Email sent successfully");
+    console.log("📩 Email sent via Resend");
     res.json({ success: true });
   } catch (error) {
-    console.error("❌ Email error:", error.message);
+    console.error("❌ Resend email error:", error);
     res.status(500).json({ error: "Failed to send email" });
   }
 });
@@ -121,10 +118,8 @@ app.get("/", (req, res) => {
 });
 
 // ─────────────────────────────────────────
-// ⏰ CRON JOBS (PRODUCTION SAFE)
+// ⏰ CRON JOBS
 // ─────────────────────────────────────────
-
-// 🌅 6:00 AM — Good Morning
 cron.schedule("0 6 * * *", async () => {
   await fetch(`${BASE_URL}/notify`, {
     method: "POST",
@@ -135,7 +130,6 @@ cron.schedule("0 6 * * *", async () => {
   });
 });
 
-// 🌙 11:00 PM — Good Night
 cron.schedule("0 23 * * *", async () => {
   await fetch(`${BASE_URL}/notify`, {
     method: "POST",
@@ -147,13 +141,7 @@ cron.schedule("0 23 * * *", async () => {
 });
 
 // ─────────────────────────────────────────
-// 🔍 ENV DEBUG (SAFE)
-// ─────────────────────────────────────────
-console.log("EMAIL_USER:", process.env.EMAIL_USER);
-console.log("EMAIL_PASS:", process.env.EMAIL_PASS ? "LOADED" : "MISSING");
-
-// ─────────────────────────────────────────
-// ✅ START SERVER (RENDER SAFE)
+// ✅ START SERVER
 // ─────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
