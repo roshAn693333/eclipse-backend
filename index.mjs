@@ -15,9 +15,10 @@ dotenv.config();
 const app = express();
 
 // ─────────────────────────────────────────
-// ✅ BASE URL (FOR CRON + PROD)
+// ✅ BASE URL (CRON SAFE)
 // ─────────────────────────────────────────
-const BASE_URL = process.env.BACKEND_URL || "http://localhost:5000";
+const BASE_URL =
+  process.env.BACKEND_URL || "http://localhost:5000";
 
 // ─────────────────────────────────────────
 // ✅ RESEND CLIENT
@@ -58,23 +59,27 @@ app.use("/api/period", periodRoutes);
 app.post("/api/send-message", async (req, res) => {
   const { message } = req.body;
 
-  if (!message || !message.trim()) {
-    return res.status(400).json({ error: "Message is empty" });
+  if (!message?.trim()) {
+    return res
+      .status(400)
+      .json({ error: "Message is empty" });
   }
 
   try {
     await resend.emails.send({
-      from: "Eclipse  <onboarding@resend.dev>",
+      from: "Eclipse 🤍 <onboarding@resend.dev>", // ✅ sandbox-safe
       to: [process.env.RECEIVER_EMAIL],
       subject: "💌 New message from her",
       text: message,
     });
 
     console.log("📩 Email sent via Resend");
-    res.json({ success: true });
+    return res.json({ success: true });
   } catch (error) {
     console.error("❌ Resend email error:", error);
-    res.status(500).json({ error: "Failed to send email" });
+    return res
+      .status(500)
+      .json({ error: "Failed to send email" });
   }
 });
 
@@ -86,6 +91,10 @@ let notificationsQueue = [];
 app.post("/notify", async (req, res) => {
   const { body } = req.body;
 
+  if (!body?.trim()) {
+    return res.status(400).json({ success: false });
+  }
+
   try {
     await client.messages.create({
       from: process.env.TWILIO_PHONE,
@@ -94,20 +103,16 @@ app.post("/notify", async (req, res) => {
     });
 
     console.log("📩 SMS sent:", body);
-    res.json({ success: true });
+    return res.json({ success: true });
   } catch (error) {
     console.error("❌ SMS error:", error.message);
-    res.status(500).json({ success: false });
+    return res.status(500).json({ success: false });
   }
 });
 
 app.get("/notify-latest", (req, res) => {
-  if (notificationsQueue.length > 0) {
-    const next = notificationsQueue.shift();
-    res.json(next);
-  } else {
-    res.json(null);
-  }
+  const next = notificationsQueue.shift() || null;
+  res.json(next);
 });
 
 // ─────────────────────────────────────────
@@ -118,32 +123,43 @@ app.get("/", (req, res) => {
 });
 
 // ─────────────────────────────────────────
-// ⏰ CRON JOBS
+// ⏰ CRON JOBS (RENDER SAFE)
 // ─────────────────────────────────────────
 cron.schedule("0 6 * * *", async () => {
-  await fetch(`${BASE_URL}/notify`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      body: "Good morning 🤍 I hope today treats you gently. I’m always with you.",
-    }),
-  });
+  try {
+    await fetch(`${BASE_URL}/notify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        body:
+          "Good morning 🤍 I hope today treats you gently. I’m always with you.",
+      }),
+    });
+  } catch (err) {
+    console.error("❌ Morning cron failed:", err);
+  }
 });
 
 cron.schedule("0 23 * * *", async () => {
-  await fetch(`${BASE_URL}/notify`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      body: "Good night 🤍 You did enough today. Rest well, my love.",
-    }),
-  });
+  try {
+    await fetch(`${BASE_URL}/notify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        body:
+          "Good night 🤍 You did enough today. Rest well, my love.",
+      }),
+    });
+  } catch (err) {
+    console.error("❌ Night cron failed:", err);
+  }
 });
 
 // ─────────────────────────────────────────
-// ✅ START SERVER
+// ✅ START SERVER (RENDER SAFE)
 // ─────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
+
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
